@@ -1,21 +1,60 @@
-// scripts aqui
-import express from "express";
-import bodyParser from "body-parser";
+import fs from 'fs'
+import path from 'path'
+import Sequelize from 'sequelize'
+import configJson from '../config/config'
 
-const app = express();
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: false }));
+const basename = path.basename(__filename)
+const env = process.env.NODE_ENV ? process.env.NODE_ENV : 'development'
 
-const port = process.env.PORT || 3000;
+const config = configJson[env]
 
-app.get("*", (req, res) =>
-  res.status(200).send({
-    message: "chorrindo mais a cada dia que passa 😂",
+console.log('this is the environment: ', env)
+
+const db = {}
+
+let sequelize
+if (config.environment === 'production') {
+  sequelize = new Sequelize(
+      process.env[config.use_env_variable], config
+    )
+  sequelize = new Sequelize(
+    process.env.DB_NAME,
+    process.env.DB_USER,
+    process.env.DB_PASS, {
+      host: process.env.DB_HOST,
+      port: process.env.DB_PORT,
+      dialect: 'postgres',
+      dialectOption: {
+        ssl: true,
+        native: true
+      },
+      logging: true
+    }
+  )
+} else {
+  sequelize = new Sequelize(
+     config.database, config.username, config.password, config
+  )
+}
+
+fs
+  .readdirSync(__dirname)
+  .filter((file) => {
+    return (file.indexOf('.') !== 0) &&
+           (file !== basename) && (file.slice(-3) === '.js')
   })
-);
+  .forEach((file) => {
+    const model = sequelize.import(path.join(__dirname, file))
+    db[model.name] = model
+  })
 
-app.listen(port, () => {
-  console.log(`Server is running on PORT ${port}`);
-});
+Object.keys(db).forEach((modelName) => {
+  if (db[modelName].associate) {
+    db[modelName].associate(db)
+  }
+})
 
-export default app;
+db.sequelize = sequelize
+db.Sequelize = Sequelize
+
+export default db
